@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "paper-digester"
+version = "0.1.0"
+description = "A tiny CLI that turns arXiv links or PDFs into structured Markdown notes + an index."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Leo"}]
+dependencies = [
+  "requests>=2.31.0",
+  "pypdf>=4.0.0"
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0"]
+
+[project.scripts]
+paper-digester = "paper_digester.cli:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+addopts = "-q"
