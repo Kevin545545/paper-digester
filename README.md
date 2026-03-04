@@ -17,15 +17,32 @@ paper-digester add https://arxiv.org/abs/1706.03762 --download-pdf --tags transf
 paper-digester list
 ```
 
+## Directory Structure
+
+All outputs are stored under your configured `<notes_dir>`:
+
+```text
+<notes_dir>/
+  summary/
+    INDEX.md
+    <slug>.md
+  pdfs/
+    <slug>.pdf
+  assets/
+    <slug>/
+      method.png
+```
+
 ## Features
 
 - Add from arXiv URL / arXiv ID / local PDF
 - Auto-fill note sections (OpenAI if `OPENAI_API_KEY` is set, heuristic fallback otherwise)
 - Optional PDF download to `<notes_dir>/pdfs/<slug>.pdf`
 - Generated method diagram at `<notes_dir>/assets/<slug>/method.png`
-- Auto-maintained `INDEX.md` sorted newest-first
-- Search across all notes
+- Auto-maintained `summary/INDEX.md` sorted newest-first
+- Search across all summaries
 - Local web dashboard (`paper-digester web`)
+- Web PDF upload (drag/drop + form upload, max 50MB)
 
 ## Install
 
@@ -45,11 +62,13 @@ python -m pip install -e .
 
 - `paper-digester init [--notes-dir PATH]`
 - `paper-digester add <arxiv_url|arxiv_id|pdf_path> [--tags ...] [--notes-dir PATH] [--download-pdf]`
+- `paper-digester add-pdf /path/to/file.pdf [--tags ...] [--notes-dir PATH]`
 - `paper-digester list`
 - `paper-digester search <keyword>`
 - `paper-digester web [--notes-dir PATH] [--host 127.0.0.1] [--port 8017]`
 - `paper-digester config show`
 - `paper-digester config set notes_dir PATH`
+- `paper-digester migrate [--notes-dir PATH]`
 
 ## Using Windows Drives with WSL
 
@@ -69,17 +88,7 @@ Config file:
 
 - `~/.paper-digester/config.json`
 
-Example:
-
-```json
-{
-  "notes_dir": "/mnt/f/paper-notes"
-}
-```
-
-## Web Dashboard
-
-Start local dashboard:
+## Web Dashboard + PDF Upload
 
 ```bash
 paper-digester web
@@ -87,18 +96,17 @@ paper-digester web
 
 Open: <http://127.0.0.1:8017>
 
-Dashboard includes:
-- note listing
-- keyword search
-- markdown viewer
-- PDF link (if downloaded)
-- method diagram preview
+Then drag-and-drop (or choose) a PDF in the upload box and click **Upload**.
+
+- Upload limit: **50MB**
+- After upload, you’re redirected to the generated note page.
 
 ## Example workflow
 
 ```bash
 paper-digester config set notes_dir /mnt/f/paper-notes
-paper-digester add https://arxiv.org/abs/2401.00001 --download-pdf --tags llm reading-group
+paper-digester add-pdf ~/openclaw/projects/papers/my-paper.pdf --tags reading-group
+paper-digester add https://arxiv.org/abs/2401.00001 --download-pdf --tags llm cv
 paper-digester search ablation
 paper-digester web
 ```

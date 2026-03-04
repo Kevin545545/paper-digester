@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -30,13 +32,33 @@ class NoteRecord:
     my_questions: list[str]
 
 
+def summary_dir(notes_dir: Path) -> Path:
+    return notes_dir / "summary"
+
+
 def ensure_layout(notes_dir: Path) -> None:
     notes_dir.mkdir(parents=True, exist_ok=True)
     (notes_dir / "pdfs").mkdir(parents=True, exist_ok=True)
     (notes_dir / "assets").mkdir(parents=True, exist_ok=True)
-    index = notes_dir / "INDEX.md"
+    sdir = summary_dir(notes_dir)
+    sdir.mkdir(parents=True, exist_ok=True)
+    index = sdir / "INDEX.md"
     if not index.exists():
         index.write_text(_index_header(), encoding="utf-8")
+
+
+def migrate_legacy_markdown(notes_dir: Path) -> None:
+    ensure_layout(notes_dir)
+    sdir = summary_dir(notes_dir)
+    skip = {"INDEX.md", "README.md", "readme.md", "CHANGELOG.md", "LICENSE.md"}
+    for md in notes_dir.glob("*.md"):
+        if md.name in skip:
+            continue
+        target = _unique_path(sdir / md.name)
+        shutil.move(str(md), str(target))
+    if (notes_dir / "INDEX.md").exists():
+        shutil.move(str(notes_dir / "INDEX.md"), str(_unique_path(sdir / "INDEX.md")))
+    rebuild_index(notes_dir)
 
 
 def _index_header() -> str:
@@ -86,11 +108,67 @@ def add_paper(
 
     meta, pdf_excerpt = _build_metadata(project_root, source_input)
     slug = slugify(meta.title)
-    added_at = now_iso()
 
     if download_pdf and meta.pdf_url:
         _download_pdf_if_needed(meta.pdf_url, notes_dir / "pdfs" / f"{slug}.pdf")
 
+    note_path = _write_summary_note(notes_dir, slug, meta, pdf_excerpt, tags)
+    generate_method_diagram(notes_dir / "assets" / slug / "method.png")
+    rebuild_index(notes_dir)
+    return note_path
+
+
+def add_pdf_file(project_root: Path, notes_dir: Path, pdf_path: str | Path, tags: list[str] | None = None) -> Path:
+    tags = tags or []
+    ensure_layout(notes_dir)
+    source = safe_resolve_path(pdf_path, project_root)
+    if source.suffix.lower() != ".pdf" or not source.exists():
+        raise ValueError("add-pdf requires an existing .pdf file")
+
+    file_hash = hashlib.sha256(source.read_bytes()).hexdigest()[:8]
+    slug = slugify(f"{source.stem}-{file_hash}")
+    target_pdf = _unique_path(notes_dir / "pdfs" / f"{slug}.pdf")
+    shutil.copy2(source, target_pdf)
+
+    excerpt = extract_pdf_text(target_pdf, max_pages=1)
+    meta = PaperMeta(
+        title=infer_title_from_pdf_path(source),
+        authors=[],
+        year=None,
+        source=str(target_pdf),
+        abstract=excerpt[:2000] if excerpt else "",
+        pdf_url=None,
+    )
+    note_path = _write_summary_note(notes_dir, target_pdf.stem, meta, excerpt, tags)
+    generate_method_diagram(notes_dir / "assets" / target_pdf.stem / "method.png")
+    rebuild_index(notes_dir)
+    return note_path
+
+
+def add_pdf_bytes(notes_dir: Path, filename: str, content: bytes, tags: list[str] | None = None) -> Path:
+    tags = tags or []
+    ensure_layout(notes_dir)
+    file_hash = hashlib.sha256(content).hexdigest()[:8]
+    slug = slugify(f"{Path(filename).stem}-{file_hash}")
+    target_pdf = _unique_path(notes_dir / "pdfs" / f"{slug}.pdf")
+    target_pdf.write_bytes(content)
+
+    excerpt = extract_pdf_text(target_pdf, max_pages=1)
+    meta = PaperMeta(
+        title=infer_title_from_pdf_path(Path(filename)),
+        authors=[],
+        year=None,
+        source=str(target_pdf),
+        abstract=excerpt[:2000] if excerpt else "",
+        pdf_url=None,
+    )
+    note_path = _write_summary_note(notes_dir, target_pdf.stem, meta, excerpt, tags)
+    generate_method_diagram(notes_dir / "assets" / target_pdf.stem / "method.png")
+    rebuild_index(notes_dir)
+    return note_path
+
+
+def _write_summary_note(notes_dir: Path, slug: str, meta: PaperMeta, pdf_excerpt: str, tags: list[str]) -> Path:
     sections = generate_sections(meta, pdf_excerpt)
     note = NoteRecord(
         title=meta.title,
@@ -100,7 +178,7 @@ def add_paper(
         abstract=meta.abstract.strip() if meta.abstract else pdf_excerpt[:1800],
         keywords="",
         tags=", ".join(tags),
-        added_at=added_at,
+        added_at=now_iso(),
         slug=slug,
         key_contributions=sections["key_contributions"],
         method_overview=sections["method_overview"],
@@ -108,14 +186,8 @@ def add_paper(
         weaknesses=sections["weaknesses"],
         my_questions=sections["my_questions"],
     )
-
-    note_path = notes_dir / f"{slug}.md"
+    note_path = _unique_path(summary_dir(notes_dir) / f"{slug}.md")
     note_path.write_text(build_note_template(note), encoding="utf-8")
-
-    diagram_path = notes_dir / "assets" / slug / "method.png"
-    generate_method_diagram(diagram_path)
-
-    rebuild_index(notes_dir)
     return note_path
 
 
@@ -162,8 +234,9 @@ def _build_metadata(project_root: Path, source_input: str) -> tuple[PaperMeta, s
 
 def list_notes(notes_dir: Path) -> list[Path]:
     ensure_layout(notes_dir)
+    sdir = summary_dir(notes_dir)
     return sorted(
-        [p for p in notes_dir.glob("*.md") if p.name != "INDEX.md"],
+        [p for p in sdir.glob("*.md") if p.name != "INDEX.md"],
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
@@ -184,7 +257,7 @@ def rebuild_index(notes_dir: Path) -> Path:
 
     rows.sort(key=lambda x: x[0], reverse=True)
     lines = [_index_header()] + [r for _, r in rows]
-    index_path = notes_dir / "INDEX.md"
+    index_path = summary_dir(notes_dir) / "INDEX.md"
     index_path.write_text("".join(lines), encoding="utf-8")
     return index_path
 
@@ -214,3 +287,17 @@ def _extract_bullet_value(content: str, field: str) -> str | None:
         if line.startswith(token):
             return line[len(token) :].strip()
     return None
+
+
+def _unique_path(path: Path) -> Path:
+    if not path.exists():
+        return path
+    stem = path.stem
+    suffix = path.suffix
+    parent = path.parent
+    i = 1
+    while True:
+        candidate = parent / f"{stem}-{i}{suffix}"
+        if not candidate.exists():
+            return candidate
+        i += 1

@@ -41,5 +41,5 @@ def test_custom_notes_directory(tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr(core, "_build_metadata", fake_meta)
     note_path = core.add_paper(project_root, notes_dir, "anything")
-    assert note_path.parent == notes_dir
-    assert (notes_dir / "INDEX.md").exists()
+    assert note_path.parent == notes_dir / "summary"
+    assert (notes_dir / "summary" / "INDEX.md").exists()

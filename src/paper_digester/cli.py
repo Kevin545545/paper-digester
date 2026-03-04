@@ -7,7 +7,7 @@ from pathlib import Path
 import uvicorn
 
 from .config import CONFIG_PATH, load_config, resolve_notes_dir, save_config
-from .core import add_paper, ensure_layout, list_notes, search_notes
+from .core import add_paper, add_pdf_file, ensure_layout, list_notes, migrate_legacy_markdown, search_notes
 from .web import create_app
 
 
@@ -28,6 +28,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_add.add_argument("--notes-dir", help="Directory to store notes and INDEX.md")
     p_add.add_argument("--download-pdf", action="store_true", help="Download arXiv PDF to notes_dir/pdfs")
     p_add.set_defaults(func=cmd_add)
+
+    p_add_pdf = sub.add_parser("add-pdf", help="Copy local PDF and generate summary")
+    p_add_pdf.add_argument("pdf_path", help="Path to local PDF")
+    p_add_pdf.add_argument("--tags", nargs="*", default=[], help="Optional tags")
+    p_add_pdf.add_argument("--notes-dir", help="Directory to store notes and INDEX.md")
+    p_add_pdf.set_defaults(func=cmd_add_pdf)
 
     p_list = sub.add_parser("list", help="List notes newest-first")
     p_list.set_defaults(func=cmd_list)
@@ -52,6 +58,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_cfg_set.add_argument("value")
     p_cfg_set.set_defaults(func=cmd_config_set)
 
+    p_migrate = sub.add_parser("migrate", help="Migrate legacy markdown notes into summary/")
+    p_migrate.add_argument("--notes-dir", help="Directory to migrate")
+    p_migrate.set_defaults(func=cmd_migrate)
+
     return parser
 
 
@@ -59,7 +69,8 @@ def cmd_init(args: argparse.Namespace) -> int:
     notes_dir = resolve_notes_dir(args.notes_dir)
     save_config(notes_dir)
     ensure_layout(notes_dir)
-    print(f"Initialized {notes_dir} and {notes_dir / 'INDEX.md'}")
+    migrate_legacy_markdown(notes_dir)
+    print(f"Initialized {notes_dir} and {notes_dir / 'summary' / 'INDEX.md'}")
     return 0
 
 
@@ -75,6 +86,16 @@ def cmd_add(args: argparse.Namespace) -> int:
         tags=args.tags,
         download_pdf=args.download_pdf,
     )
+    print(f"Added note: {note_path}")
+    return 0
+
+
+def cmd_add_pdf(args: argparse.Namespace) -> int:
+    root = Path.cwd()
+    notes_dir = resolve_notes_dir(args.notes_dir)
+    if args.notes_dir:
+        save_config(notes_dir)
+    note_path = add_pdf_file(root, notes_dir, args.pdf_path, tags=args.tags)
     print(f"Added note: {note_path}")
     return 0
 
@@ -120,6 +141,13 @@ def cmd_config_set(args: argparse.Namespace) -> int:
     if args.key == "notes_dir":
         save_config(args.value)
     print("Config updated.")
+    return 0
+
+
+def cmd_migrate(args: argparse.Namespace) -> int:
+    notes_dir = resolve_notes_dir(args.notes_dir)
+    migrate_legacy_markdown(notes_dir)
+    print(f"Migrated markdown into {notes_dir / 'summary'}")
     return 0
 
 
