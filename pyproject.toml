@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "paper-digester"
 version = "0.1.0"
-description = "A tiny CLI that turns arXiv links or PDFs into structured Markdown notes + an index."
+description = "A tiny CLI that turns arXiv links into structured Markdown notes + an index."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -13,15 +13,13 @@ authors = [{name = "Leo"}]
 dependencies = [
   "requests>=2.31.0",
   "pypdf>=4.0.0",
-  "pillow>=10.0.0",
   "fastapi>=0.110.0",
   "uvicorn>=0.28.0",
-  "markdown>=3.6",
-  "python-multipart>=0.0.9"
+  "markdown>=3.6"
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0.0", "httpx>=0.27.0"]
+dev = ["pytest>=8.0.0"]
 
 [project.scripts]
 paper-digester = "paper_digester.cli:main"

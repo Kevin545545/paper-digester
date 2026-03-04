@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,10 +7,9 @@ from pathlib import Path
 import requests
 
 from .arxiv_fetch import PaperMeta, fetch_arxiv_metadata, parse_arxiv_id
-from .diagram import generate_method_diagram
-from .pdf_extract import extract_pdf_text, infer_title_from_pdf_path
+from .pdf_extract import extract_pdf_text
 from .summarizer import generate_sections
-from .utils import now_iso, safe_resolve_path, slugify
+from .utils import now_iso, slugify
 
 
 @dataclass
@@ -39,7 +37,6 @@ def summary_dir(notes_dir: Path) -> Path:
 def ensure_layout(notes_dir: Path) -> None:
     notes_dir.mkdir(parents=True, exist_ok=True)
     (notes_dir / "pdfs").mkdir(parents=True, exist_ok=True)
-    (notes_dir / "assets").mkdir(parents=True, exist_ok=True)
     sdir = summary_dir(notes_dir)
     sdir.mkdir(parents=True, exist_ok=True)
     index = sdir / "INDEX.md"
@@ -103,67 +100,23 @@ def add_paper(
     tags: list[str] | None = None,
     download_pdf: bool = False,
 ) -> Path:
+    del project_root
     tags = tags or []
     ensure_layout(notes_dir)
 
-    meta, pdf_excerpt = _build_metadata(project_root, source_input)
+    meta = _build_metadata(source_input)
     slug = slugify(meta.title)
 
+    pdf_excerpt = ""
     if download_pdf and meta.pdf_url:
-        _download_pdf_if_needed(meta.pdf_url, notes_dir / "pdfs" / f"{slug}.pdf")
+        pdf_path = notes_dir / "pdfs" / f"{slug}.pdf"
+        _download_pdf_if_needed(meta.pdf_url, pdf_path)
+        try:
+            pdf_excerpt = extract_pdf_text(pdf_path, max_pages=1)
+        except Exception:
+            pdf_excerpt = ""
 
     note_path = _write_summary_note(notes_dir, slug, meta, pdf_excerpt, tags)
-    generate_method_diagram(notes_dir / "assets" / slug / "method.png")
-    rebuild_index(notes_dir)
-    return note_path
-
-
-def add_pdf_file(project_root: Path, notes_dir: Path, pdf_path: str | Path, tags: list[str] | None = None) -> Path:
-    tags = tags or []
-    ensure_layout(notes_dir)
-    source = safe_resolve_path(pdf_path, project_root)
-    if source.suffix.lower() != ".pdf" or not source.exists():
-        raise ValueError("add-pdf requires an existing .pdf file")
-
-    file_hash = hashlib.sha256(source.read_bytes()).hexdigest()[:8]
-    slug = slugify(f"{source.stem}-{file_hash}")
-    target_pdf = _unique_path(notes_dir / "pdfs" / f"{slug}.pdf")
-    shutil.copy2(source, target_pdf)
-
-    excerpt = extract_pdf_text(target_pdf, max_pages=1)
-    meta = PaperMeta(
-        title=infer_title_from_pdf_path(source),
-        authors=[],
-        year=None,
-        source=str(target_pdf),
-        abstract=excerpt[:2000] if excerpt else "",
-        pdf_url=None,
-    )
-    note_path = _write_summary_note(notes_dir, target_pdf.stem, meta, excerpt, tags)
-    generate_method_diagram(notes_dir / "assets" / target_pdf.stem / "method.png")
-    rebuild_index(notes_dir)
-    return note_path
-
-
-def add_pdf_bytes(notes_dir: Path, filename: str, content: bytes, tags: list[str] | None = None) -> Path:
-    tags = tags or []
-    ensure_layout(notes_dir)
-    file_hash = hashlib.sha256(content).hexdigest()[:8]
-    slug = slugify(f"{Path(filename).stem}-{file_hash}")
-    target_pdf = _unique_path(notes_dir / "pdfs" / f"{slug}.pdf")
-    target_pdf.write_bytes(content)
-
-    excerpt = extract_pdf_text(target_pdf, max_pages=1)
-    meta = PaperMeta(
-        title=infer_title_from_pdf_path(Path(filename)),
-        authors=[],
-        year=None,
-        source=str(target_pdf),
-        abstract=excerpt[:2000] if excerpt else "",
-        pdf_url=None,
-    )
-    note_path = _write_summary_note(notes_dir, target_pdf.stem, meta, excerpt, tags)
-    generate_method_diagram(notes_dir / "assets" / target_pdf.stem / "method.png")
     rebuild_index(notes_dir)
     return note_path
 
@@ -203,33 +156,14 @@ def _download_pdf_if_needed(url: str, out_path: Path) -> None:
                     f.write(chunk)
 
 
-def _build_metadata(project_root: Path, source_input: str) -> tuple[PaperMeta, str]:
+def _build_metadata(source_input: str) -> PaperMeta:
     arxiv_id = parse_arxiv_id(source_input)
-    if arxiv_id:
-        meta = fetch_arxiv_metadata(source_input)
-        if not meta:
-            raise ValueError(f"Could not fetch metadata for arXiv input: {source_input}")
-        return meta, ""
-
-    candidate = safe_resolve_path(source_input, project_root)
-    if candidate.suffix.lower() != ".pdf":
-        raise ValueError("Input must be an arXiv URL/id or a local PDF path.")
-    if not candidate.exists():
-        raise FileNotFoundError(f"PDF not found: {candidate}")
-
-    extracted = extract_pdf_text(candidate, max_pages=1)
-    title = infer_title_from_pdf_path(candidate)
-    return (
-        PaperMeta(
-            title=title,
-            authors=[],
-            year=None,
-            source=str(candidate),
-            abstract=extracted[:2000] if extracted else "",
-            pdf_url=None,
-        ),
-        extracted,
-    )
+    if not arxiv_id:
+        raise ValueError("Input must be an arXiv URL or arXiv id.")
+    meta = fetch_arxiv_metadata(source_input)
+    if not meta:
+        raise ValueError(f"Could not fetch metadata for arXiv input: {source_input}")
+    return meta
 
 
 def list_notes(notes_dir: Path) -> list[Path]:

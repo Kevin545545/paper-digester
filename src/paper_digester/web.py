@@ -3,12 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import markdown
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import HTMLResponse
 
-from .core import add_pdf_bytes, list_notes, search_notes, summary_dir
-
-MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+from .core import list_notes, search_notes, summary_dir
 
 
 def create_app(notes_dir: Path) -> FastAPI:
@@ -22,33 +20,9 @@ def create_app(notes_dir: Path) -> FastAPI:
         <html><body>
         <h1>paper-digester</h1>
         <form><input name='q' value='{q}' placeholder='search'/><button>Search</button></form>
-        <h3>Upload local PDF (max 50MB)</h3>
-        <form action='/upload' method='post' enctype='multipart/form-data'
-              style='border:2px dashed #999;padding:20px;width:420px;'>
-          <p>Drop PDF here or choose file</p>
-          <input type='file' name='file' accept='.pdf,application/pdf' required /><br/><br/>
-          <input type='text' name='tags' placeholder='tags comma-separated (optional)' style='width:300px'/><br/><br/>
-          <button type='submit'>Upload</button>
-        </form>
         <ul>{items}</ul>
         </body></html>
         """
-
-    @app.post("/upload")
-    async def upload(file: UploadFile = File(...), tags: str = Form(default="")):
-        filename = file.filename or "upload.pdf"
-        if not filename.lower().endswith(".pdf"):
-            raise HTTPException(status_code=400, detail="Only PDF is allowed")
-        if file.content_type not in {"application/pdf", "application/octet-stream"}:
-            raise HTTPException(status_code=400, detail="Invalid content type")
-
-        content = await file.read()
-        if len(content) > MAX_UPLOAD_BYTES:
-            raise HTTPException(status_code=413, detail="File too large (max 50MB)")
-
-        tag_list = [t.strip() for t in tags.split(",") if t.strip()]
-        note_path = add_pdf_bytes(notes_dir, filename, content, tags=tag_list)
-        return RedirectResponse(url=f"/note/{note_path.name}", status_code=303)
 
     @app.get("/note/{name}", response_class=HTMLResponse)
     def view_note(name: str) -> str:
@@ -59,10 +33,8 @@ def create_app(notes_dir: Path) -> FastAPI:
         html = markdown.markdown(raw)
         slug = note.stem
         pdf_path = notes_dir / "pdfs" / f"{slug}.pdf"
-        diagram_path = notes_dir / "assets" / slug / "method.png"
         pdf_link = f"<p><a href='/file/pdfs/{slug}.pdf'>PDF</a></p>" if pdf_path.exists() else ""
-        diagram = f"<img src='/file/assets/{slug}/method.png' width='700'/>" if diagram_path.exists() else ""
-        return f"<html><body><a href='/'>Back</a>{pdf_link}{diagram}{html}</body></html>"
+        return f"<html><body><a href='/'>Back</a>{pdf_link}{html}</body></html>"
 
     @app.get("/file/{subpath:path}")
     def serve_file(subpath: str):

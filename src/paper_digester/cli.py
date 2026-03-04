@@ -7,14 +7,14 @@ from pathlib import Path
 import uvicorn
 
 from .config import CONFIG_PATH, load_config, resolve_notes_dir, save_config
-from .core import add_paper, add_pdf_file, ensure_layout, list_notes, migrate_legacy_markdown, search_notes
+from .core import add_paper, ensure_layout, list_notes, migrate_legacy_markdown, search_notes
 from .web import create_app
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="paper-digester",
-        description="Turn arXiv links/ids or PDFs into structured Markdown notes.",
+        description="Turn arXiv links/ids into structured Markdown notes.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -22,18 +22,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument("--notes-dir", help="Directory to store notes and INDEX.md")
     p_init.set_defaults(func=cmd_init)
 
-    p_add = sub.add_parser("add", help="Add a paper note from arXiv URL/id or local PDF")
-    p_add.add_argument("source", help="arXiv URL, arXiv id, or local PDF path")
+    p_add = sub.add_parser("add", help="Add a paper note from arXiv URL/id")
+    p_add.add_argument("source", help="arXiv URL or arXiv id")
     p_add.add_argument("--tags", nargs="*", default=[], help="Optional tags")
     p_add.add_argument("--notes-dir", help="Directory to store notes and INDEX.md")
     p_add.add_argument("--download-pdf", action="store_true", help="Download arXiv PDF to notes_dir/pdfs")
     p_add.set_defaults(func=cmd_add)
-
-    p_add_pdf = sub.add_parser("add-pdf", help="Copy local PDF and generate summary")
-    p_add_pdf.add_argument("pdf_path", help="Path to local PDF")
-    p_add_pdf.add_argument("--tags", nargs="*", default=[], help="Optional tags")
-    p_add_pdf.add_argument("--notes-dir", help="Directory to store notes and INDEX.md")
-    p_add_pdf.set_defaults(func=cmd_add_pdf)
 
     p_list = sub.add_parser("list", help="List notes newest-first")
     p_list.set_defaults(func=cmd_list)
@@ -79,23 +73,7 @@ def cmd_add(args: argparse.Namespace) -> int:
     notes_dir = resolve_notes_dir(args.notes_dir)
     if args.notes_dir:
         save_config(notes_dir)
-    note_path = add_paper(
-        root,
-        notes_dir,
-        args.source,
-        tags=args.tags,
-        download_pdf=args.download_pdf,
-    )
-    print(f"Added note: {note_path}")
-    return 0
-
-
-def cmd_add_pdf(args: argparse.Namespace) -> int:
-    root = Path.cwd()
-    notes_dir = resolve_notes_dir(args.notes_dir)
-    if args.notes_dir:
-        save_config(notes_dir)
-    note_path = add_pdf_file(root, notes_dir, args.pdf_path, tags=args.tags)
+    note_path = add_paper(root, notes_dir, args.source, tags=args.tags, download_pdf=args.download_pdf)
     print(f"Added note: {note_path}")
     return 0
 
