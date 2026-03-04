@@ -90,10 +90,34 @@ The dominant sequence transduction models are based on complex recurrent...
 
 ## CLI Commands
 
-- `paper-digester init`
-- `paper-digester add <arxiv_url|arxiv_id|pdf_path> [--tags ...]`
+- `paper-digester init [--notes-dir PATH]`
+- `paper-digester add <arxiv_url|arxiv_id|pdf_path> [--tags ...] [--notes-dir PATH]`
 - `paper-digester list`
 - `paper-digester search <keyword>`
+
+## Using Windows Drives with WSL
+
+You can store notes on Windows drives mounted in WSL (for example `F:` as `/mnt/f`).
+
+```bash
+paper-digester init --notes-dir /mnt/f/paper-notes
+paper-digester add https://arxiv.org/abs/1706.03762 --notes-dir /mnt/f/paper-notes --tags transformers
+paper-digester list
+```
+
+Config is persisted to:
+
+- `~/.paper-digester/config.json`
+
+Example:
+
+```json
+{
+  "notes_dir": "/mnt/f/paper-notes"
+}
+```
+
+Safety: notes directories are only allowed under `/mnt/` or `~/openclaw/`.
 
 ## Development
 

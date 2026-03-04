@@ -50,11 +50,7 @@ def test_index_generation_sorted_newest_first(tmp_path: Path):
         encoding="utf-8",
     )
 
-    # Force mtime order: newer newer than older
-    older.touch()
-    newer.touch()
-
-    index = rebuild_index(tmp_path)
+    index = rebuild_index(notes)
     body = index.read_text(encoding="utf-8")
     assert body.find("[Newer](newer.md)") < body.find("[Older](older.md)")
 
@@ -65,7 +61,7 @@ def test_search_keyword_matching(tmp_path: Path):
     (notes / "a.md").write_text("# A\nTransformer model", encoding="utf-8")
     (notes / "b.md").write_text("# B\nConvolution network", encoding="utf-8")
 
-    matches = search_notes(tmp_path, "transformer")
+    matches = search_notes(notes, "transformer")
     assert len(matches) == 1
     assert matches[0].name == "a.md"
 

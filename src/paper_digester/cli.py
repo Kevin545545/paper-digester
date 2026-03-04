@@ -3,7 +3,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .core import add_paper, ensure_layout, list_notes, rebuild_index, search_notes
+from .config import resolve_notes_dir, save_config
+from .core import add_paper, ensure_layout, list_notes, search_notes
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -14,11 +15,13 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_init = sub.add_parser("init", help="Create notes folder and index")
+    p_init.add_argument("--notes-dir", help="Directory to store notes and INDEX.md")
     p_init.set_defaults(func=cmd_init)
 
     p_add = sub.add_parser("add", help="Add a paper note from arXiv URL/id or local PDF")
     p_add.add_argument("source", help="arXiv URL, arXiv id, or local PDF path")
     p_add.add_argument("--tags", nargs="*", default=[], help="Optional tags")
+    p_add.add_argument("--notes-dir", help="Directory to store notes and INDEX.md")
     p_add.set_defaults(func=cmd_add)
 
     p_list = sub.add_parser("list", help="List notes newest-first")
@@ -32,22 +35,26 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def cmd_init(args: argparse.Namespace) -> int:
-    root = Path.cwd()
-    ensure_layout(root)
-    print("Initialized notes/ and notes/INDEX.md")
+    notes_dir = resolve_notes_dir(args.notes_dir)
+    save_config(notes_dir)
+    ensure_layout(notes_dir)
+    print(f"Initialized {notes_dir} and {notes_dir / 'INDEX.md'}")
     return 0
 
 
 def cmd_add(args: argparse.Namespace) -> int:
     root = Path.cwd()
-    note_path = add_paper(root, args.source, tags=args.tags)
+    notes_dir = resolve_notes_dir(args.notes_dir)
+    if args.notes_dir:
+        save_config(notes_dir)
+    note_path = add_paper(root, notes_dir, args.source, tags=args.tags)
     print(f"Added note: {note_path}")
     return 0
 
 
 def cmd_list(args: argparse.Namespace) -> int:
-    root = Path.cwd()
-    notes = list_notes(root)
+    notes_dir = resolve_notes_dir()
+    notes = list_notes(notes_dir)
     if not notes:
         print("No notes yet. Run: paper-digester add <source>")
         return 0
@@ -57,8 +64,8 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def cmd_search(args: argparse.Namespace) -> int:
-    root = Path.cwd()
-    matches = search_notes(root, args.keyword)
+    notes_dir = resolve_notes_dir()
+    matches = search_notes(notes_dir, args.keyword)
     if not matches:
         print("No matches.")
         return 0

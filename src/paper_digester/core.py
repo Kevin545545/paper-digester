@@ -21,8 +21,7 @@ class NoteRecord:
     slug: str
 
 
-def ensure_layout(project_root: Path) -> None:
-    notes_dir = project_root / "notes"
+def ensure_layout(notes_dir: Path) -> None:
     notes_dir.mkdir(parents=True, exist_ok=True)
     index = notes_dir / "INDEX.md"
     if not index.exists():
@@ -56,9 +55,14 @@ def build_note_template(record: NoteRecord) -> str:
     )
 
 
-def add_paper(project_root: Path, source_input: str, tags: list[str] | None = None) -> Path:
+def add_paper(
+    project_root: Path,
+    notes_dir: Path,
+    source_input: str,
+    tags: list[str] | None = None,
+) -> Path:
     tags = tags or []
-    ensure_layout(project_root)
+    ensure_layout(notes_dir)
 
     meta = _build_metadata(project_root, source_input)
     slug = slugify(meta.title)
@@ -75,9 +79,9 @@ def add_paper(project_root: Path, source_input: str, tags: list[str] | None = No
         slug=slug,
     )
 
-    note_path = project_root / "notes" / f"{slug}.md"
+    note_path = notes_dir / f"{slug}.md"
     note_path.write_text(build_note_template(note), encoding="utf-8")
-    rebuild_index(project_root)
+    rebuild_index(notes_dir)
     return note_path
 
 
@@ -107,9 +111,8 @@ def _build_metadata(project_root: Path, source_input: str) -> PaperMeta:
     )
 
 
-def list_notes(project_root: Path) -> list[Path]:
-    ensure_layout(project_root)
-    notes_dir = project_root / "notes"
+def list_notes(notes_dir: Path) -> list[Path]:
+    ensure_layout(notes_dir)
     return sorted(
         [p for p in notes_dir.glob("*.md") if p.name != "INDEX.md"],
         key=lambda p: p.stat().st_mtime,
@@ -117,10 +120,10 @@ def list_notes(project_root: Path) -> list[Path]:
     )
 
 
-def rebuild_index(project_root: Path) -> Path:
-    ensure_layout(project_root)
+def rebuild_index(notes_dir: Path) -> Path:
+    ensure_layout(notes_dir)
     rows: list[tuple[str, str]] = []
-    for n in list_notes(project_root):
+    for n in list_notes(notes_dir):
         content = n.read_text(encoding="utf-8")
         title = _extract_field(content, "# ") or n.stem
         year = _extract_bullet_value(content, "Year") or "Unknown"
@@ -132,17 +135,17 @@ def rebuild_index(project_root: Path) -> Path:
 
     rows.sort(key=lambda x: x[0], reverse=True)
     lines = [_index_header()] + [r for _, r in rows]
-    index_path = project_root / "notes" / "INDEX.md"
+    index_path = notes_dir / "INDEX.md"
     index_path.write_text("".join(lines), encoding="utf-8")
     return index_path
 
 
-def search_notes(project_root: Path, keyword: str) -> list[Path]:
+def search_notes(notes_dir: Path, keyword: str) -> list[Path]:
     k = keyword.strip().lower()
     if not k:
         return []
     matches: list[Path] = []
-    for note in list_notes(project_root):
+    for note in list_notes(notes_dir):
         text = note.read_text(encoding="utf-8").lower()
         if k in text:
             matches.append(note)
