@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
-from .config import resolve_notes_dir, save_config
+import uvicorn
+
+from .config import CONFIG_PATH, load_config, resolve_notes_dir, save_config
 from .core import add_paper, ensure_layout, list_notes, search_notes
+from .web import create_app
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -22,6 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_add.add_argument("source", help="arXiv URL, arXiv id, or local PDF path")
     p_add.add_argument("--tags", nargs="*", default=[], help="Optional tags")
     p_add.add_argument("--notes-dir", help="Directory to store notes and INDEX.md")
+    p_add.add_argument("--download-pdf", action="store_true", help="Download arXiv PDF to notes_dir/pdfs")
     p_add.set_defaults(func=cmd_add)
 
     p_list = sub.add_parser("list", help="List notes newest-first")
@@ -30,6 +35,22 @@ def build_parser() -> argparse.ArgumentParser:
     p_search = sub.add_parser("search", help="Search notes by keyword")
     p_search.add_argument("keyword")
     p_search.set_defaults(func=cmd_search)
+
+    p_web = sub.add_parser("web", help="Start local web dashboard")
+    p_web.add_argument("--notes-dir", help="Directory to read notes from")
+    p_web.add_argument("--host", default="127.0.0.1")
+    p_web.add_argument("--port", type=int, default=8017)
+    p_web.set_defaults(func=cmd_web)
+
+    p_config = sub.add_parser("config", help="Config operations")
+    config_sub = p_config.add_subparsers(dest="config_cmd", required=True)
+    p_cfg_show = config_sub.add_parser("show", help="Show current config")
+    p_cfg_show.set_defaults(func=cmd_config_show)
+
+    p_cfg_set = config_sub.add_parser("set", help="Set config value")
+    p_cfg_set.add_argument("key", choices=["notes_dir"])
+    p_cfg_set.add_argument("value")
+    p_cfg_set.set_defaults(func=cmd_config_set)
 
     return parser
 
@@ -47,7 +68,13 @@ def cmd_add(args: argparse.Namespace) -> int:
     notes_dir = resolve_notes_dir(args.notes_dir)
     if args.notes_dir:
         save_config(notes_dir)
-    note_path = add_paper(root, notes_dir, args.source, tags=args.tags)
+    note_path = add_paper(
+        root,
+        notes_dir,
+        args.source,
+        tags=args.tags,
+        download_pdf=args.download_pdf,
+    )
     print(f"Added note: {note_path}")
     return 0
 
@@ -71,6 +98,28 @@ def cmd_search(args: argparse.Namespace) -> int:
         return 0
     for m in matches:
         print(m.name)
+    return 0
+
+
+def cmd_web(args: argparse.Namespace) -> int:
+    notes_dir = resolve_notes_dir(args.notes_dir)
+    app = create_app(notes_dir)
+    print(f"Dashboard: http://{args.host}:{args.port}")
+    uvicorn.run(app, host=args.host, port=args.port)
+    return 0
+
+
+def cmd_config_show(args: argparse.Namespace) -> int:
+    cfg = load_config()
+    print(json.dumps(cfg, indent=2))
+    print(f"Config path: {CONFIG_PATH}")
+    return 0
+
+
+def cmd_config_set(args: argparse.Namespace) -> int:
+    if args.key == "notes_dir":
+        save_config(args.value)
+    print("Config updated.")
     return 0
 
 

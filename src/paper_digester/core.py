@@ -3,8 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import requests
+
 from .arxiv_fetch import PaperMeta, fetch_arxiv_metadata, parse_arxiv_id
+from .diagram import generate_method_diagram
 from .pdf_extract import extract_pdf_text, infer_title_from_pdf_path
+from .summarizer import generate_sections
 from .utils import now_iso, safe_resolve_path, slugify
 
 
@@ -19,10 +23,17 @@ class NoteRecord:
     tags: str
     added_at: str
     slug: str
+    key_contributions: list[str]
+    method_overview: list[str]
+    strengths: list[str]
+    weaknesses: list[str]
+    my_questions: list[str]
 
 
 def ensure_layout(notes_dir: Path) -> None:
     notes_dir.mkdir(parents=True, exist_ok=True)
+    (notes_dir / "pdfs").mkdir(parents=True, exist_ok=True)
+    (notes_dir / "assets").mkdir(parents=True, exist_ok=True)
     index = notes_dir / "INDEX.md"
     if not index.exists():
         index.write_text(_index_header(), encoding="utf-8")
@@ -30,6 +41,13 @@ def ensure_layout(notes_dir: Path) -> None:
 
 def _index_header() -> str:
     return "# Paper Digester Index\n\n| Added At | Title | Year | Source | Tags |\n|---|---|---:|---|---|\n"
+
+
+def _bullets(lines: list[str]) -> str:
+    cleaned = [x.strip() for x in lines if x.strip()]
+    if not cleaned:
+        cleaned = ["TBD"]
+    return "\n".join([f"- {x}" for x in cleaned])
 
 
 def build_note_template(record: NoteRecord) -> str:
@@ -44,14 +62,15 @@ def build_note_template(record: NoteRecord) -> str:
         "## Abstract\n\n"
         f"{record.abstract or 'N/A'}\n\n"
         "## Key Contributions\n\n"
-        "- \n\n"
+        f"{_bullets(record.key_contributions)}\n\n"
         "## Method Overview\n\n"
-        "- \n\n"
-        "## Strengths/Weaknesses\n\n"
-        "- Strengths: \n"
-        "- Weaknesses: \n\n"
+        f"{_bullets(record.method_overview)}\n\n"
+        "## Strengths\n\n"
+        f"{_bullets(record.strengths)}\n\n"
+        "## Weaknesses\n\n"
+        f"{_bullets(record.weaknesses)}\n\n"
         "## My Questions\n\n"
-        "- \n"
+        f"{_bullets(record.my_questions)}\n"
     )
 
 
@@ -60,38 +79,65 @@ def add_paper(
     notes_dir: Path,
     source_input: str,
     tags: list[str] | None = None,
+    download_pdf: bool = False,
 ) -> Path:
     tags = tags or []
     ensure_layout(notes_dir)
 
-    meta = _build_metadata(project_root, source_input)
+    meta, pdf_excerpt = _build_metadata(project_root, source_input)
     slug = slugify(meta.title)
     added_at = now_iso()
+
+    if download_pdf and meta.pdf_url:
+        _download_pdf_if_needed(meta.pdf_url, notes_dir / "pdfs" / f"{slug}.pdf")
+
+    sections = generate_sections(meta, pdf_excerpt)
     note = NoteRecord(
         title=meta.title,
         authors=", ".join(meta.authors) if meta.authors else "Unknown",
         year=meta.year or "Unknown",
         source=meta.source,
-        abstract=meta.abstract.strip() if meta.abstract else "",
+        abstract=meta.abstract.strip() if meta.abstract else pdf_excerpt[:1800],
         keywords="",
         tags=", ".join(tags),
         added_at=added_at,
         slug=slug,
+        key_contributions=sections["key_contributions"],
+        method_overview=sections["method_overview"],
+        strengths=sections["strengths"],
+        weaknesses=sections["weaknesses"],
+        my_questions=sections["my_questions"],
     )
 
     note_path = notes_dir / f"{slug}.md"
     note_path.write_text(build_note_template(note), encoding="utf-8")
+
+    diagram_path = notes_dir / "assets" / slug / "method.png"
+    generate_method_diagram(diagram_path)
+
     rebuild_index(notes_dir)
     return note_path
 
 
-def _build_metadata(project_root: Path, source_input: str) -> PaperMeta:
+def _download_pdf_if_needed(url: str, out_path: Path) -> None:
+    if out_path.exists():
+        return
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with requests.get(url, timeout=60, stream=True) as resp:
+        resp.raise_for_status()
+        with out_path.open("wb") as f:
+            for chunk in resp.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+
+
+def _build_metadata(project_root: Path, source_input: str) -> tuple[PaperMeta, str]:
     arxiv_id = parse_arxiv_id(source_input)
     if arxiv_id:
         meta = fetch_arxiv_metadata(source_input)
         if not meta:
             raise ValueError(f"Could not fetch metadata for arXiv input: {source_input}")
-        return meta
+        return meta, ""
 
     candidate = safe_resolve_path(source_input, project_root)
     if candidate.suffix.lower() != ".pdf":
@@ -99,15 +145,18 @@ def _build_metadata(project_root: Path, source_input: str) -> PaperMeta:
     if not candidate.exists():
         raise FileNotFoundError(f"PDF not found: {candidate}")
 
-    extracted = extract_pdf_text(candidate, max_pages=2)
+    extracted = extract_pdf_text(candidate, max_pages=1)
     title = infer_title_from_pdf_path(candidate)
-    return PaperMeta(
-        title=title,
-        authors=[],
-        year=None,
-        source=str(candidate),
-        abstract=extracted[:2000] if extracted else "",
-        pdf_url=None,
+    return (
+        PaperMeta(
+            title=title,
+            authors=[],
+            year=None,
+            source=str(candidate),
+            abstract=extracted[:2000] if extracted else "",
+            pdf_url=None,
+        ),
+        extracted,
     )
 
 

@@ -20,13 +20,19 @@ def test_note_template_contains_required_sections():
         tags="t1, t2",
         added_at="2026-03-04T00:00:00+00:00",
         slug="test-paper",
+        key_contributions=["c1"],
+        method_overview=["m1"],
+        strengths=["s1"],
+        weaknesses=["w1"],
+        my_questions=["q1"],
     )
     text = build_note_template(note)
     required = [
         "## Abstract",
         "## Key Contributions",
         "## Method Overview",
-        "## Strengths/Weaknesses",
+        "## Strengths",
+        "## Weaknesses",
         "## My Questions",
         "- **Added-at:**",
     ]

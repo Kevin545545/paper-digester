@@ -5,107 +5,67 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](#install)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
-`paper-digester` helps you go from "I should read this paper" to reusable notes in seconds.
+## Quick Start
 
-## Screenshots
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .[dev]
 
-- _CLI demo gif placeholder:_ `docs/demo.gif`
-- _Sample note screenshot placeholder:_ `docs/note.png`
+paper-digester init
+paper-digester add https://arxiv.org/abs/1706.03762 --download-pdf --tags transformers
+paper-digester list
+```
 
 ## Features
 
 - Add from arXiv URL / arXiv ID / local PDF
-- Structured Markdown templates for active reading
-- Auto-maintained `notes/INDEX.md` table sorted newest-first
-- Full-text keyword search over your notes
-- Safe local file handling for PDF inputs
+- Auto-fill note sections (OpenAI if `OPENAI_API_KEY` is set, heuristic fallback otherwise)
+- Optional PDF download to `<notes_dir>/pdfs/<slug>.pdf`
+- Generated method diagram at `<notes_dir>/assets/<slug>/method.png`
+- Auto-maintained `INDEX.md` sorted newest-first
+- Search across all notes
+- Local web dashboard (`paper-digester web`)
 
 ## Install
 
-### Option A: pipx (recommended)
+### Option A: pipx
 
 ```bash
 pipx install .
 ```
 
-### Option B: pip
+### Option B: editable install
 
 ```bash
 python -m pip install -e .
 ```
 
-## Quickstart
-
-```bash
-paper-digester init
-paper-digester add https://arxiv.org/abs/1706.03762 --tags transformers attention
-paper-digester search attention
-```
-
-You can also add by arXiv ID:
-
-```bash
-paper-digester add 2401.12345
-```
-
-Or add a local PDF (restricted to safe project paths):
-
-```bash
-paper-digester add ./papers/my_paper.pdf --tags class-project
-```
-
-## Example Output (note file)
-
-```md
-# Attention Is All You Need
-
-- **Authors:** Ashish Vaswani, Noam Shazeer, ...
-- **Year:** 2017
-- **Source:** arXiv:1706.03762
-- **Added-at:** 2026-03-04T19:22:10+00:00
-- **Keywords:**
-- **Tags:** transformers, attention
-
-## Abstract
-
-The dominant sequence transduction models are based on complex recurrent...
-
-## Key Contributions
-
-- 
-
-## Method Overview
-
-- 
-
-## Strengths/Weaknesses
-
-- Strengths:
-- Weaknesses:
-
-## My Questions
-
-- 
-```
-
 ## CLI Commands
 
 - `paper-digester init [--notes-dir PATH]`
-- `paper-digester add <arxiv_url|arxiv_id|pdf_path> [--tags ...] [--notes-dir PATH]`
+- `paper-digester add <arxiv_url|arxiv_id|pdf_path> [--tags ...] [--notes-dir PATH] [--download-pdf]`
 - `paper-digester list`
 - `paper-digester search <keyword>`
+- `paper-digester web [--notes-dir PATH] [--host 127.0.0.1] [--port 8017]`
+- `paper-digester config show`
+- `paper-digester config set notes_dir PATH`
 
 ## Using Windows Drives with WSL
 
-You can store notes on Windows drives mounted in WSL (for example `F:` as `/mnt/f`).
+You can store notes on mounted Windows drives:
 
 ```bash
 paper-digester init --notes-dir /mnt/f/paper-notes
-paper-digester add https://arxiv.org/abs/1706.03762 --notes-dir /mnt/f/paper-notes --tags transformers
-paper-digester list
+paper-digester add 1706.03762 --notes-dir /mnt/f/paper-notes --download-pdf
 ```
 
-Config is persisted to:
+Allowed notes directory roots:
+
+- `/mnt/`
+- `~/openclaw/`
+
+Config file:
 
 - `~/.paper-digester/config.json`
 
@@ -117,7 +77,31 @@ Example:
 }
 ```
 
-Safety: notes directories are only allowed under `/mnt/` or `~/openclaw/`.
+## Web Dashboard
+
+Start local dashboard:
+
+```bash
+paper-digester web
+```
+
+Open: <http://127.0.0.1:8017>
+
+Dashboard includes:
+- note listing
+- keyword search
+- markdown viewer
+- PDF link (if downloaded)
+- method diagram preview
+
+## Example workflow
+
+```bash
+paper-digester config set notes_dir /mnt/f/paper-notes
+paper-digester add https://arxiv.org/abs/2401.00001 --download-pdf --tags llm reading-group
+paper-digester search ablation
+paper-digester web
+```
 
 ## Development
 
@@ -128,21 +112,13 @@ python -m pip install -e .[dev]
 pytest -q
 ```
 
-## Roadmap
-
-1. Better PDF metadata extraction (title/authors/year inference)
-2. Semantic search with local embeddings
-3. BibTeX export + citation key generation
-4. Obsidian-compatible backlinks and graph view metadata
-5. Optional LLM summaries with user-provided API keys
-
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, standards, and PR flow.
+See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## Security
 
-Please report vulnerabilities responsibly. See [SECURITY.md](./SECURITY.md).
+See [SECURITY.md](./SECURITY.md).
 
 ## License
 

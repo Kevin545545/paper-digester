@@ -26,14 +26,17 @@ def test_custom_notes_directory(tmp_path: Path, monkeypatch):
     notes_dir = tmp_path / "my-notes"
     notes_dir.mkdir()
 
-    def fake_meta(_root: Path, _source: str) -> PaperMeta:
-        return PaperMeta(
-            title="Test Paper",
-            authors=["A"],
-            year="2026",
-            source="arXiv:test",
-            abstract="abstract",
-            pdf_url=None,
+    def fake_meta(_root: Path, _source: str):
+        return (
+            PaperMeta(
+                title="Test Paper",
+                authors=["A"],
+                year="2026",
+                source="arXiv:test",
+                abstract="abstract",
+                pdf_url=None,
+            ),
+            "",
         )
 
     monkeypatch.setattr(core, "_build_metadata", fake_meta)
