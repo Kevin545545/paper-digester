@@ -10,7 +10,7 @@ from .core import list_notes, search_notes, summary_dir
 
 
 def create_app(notes_dir: Path) -> FastAPI:
-    app = FastAPI(title="paper-digester")
+    app = FastAPI(title="paper-review-tool")
 
     @app.get("/", response_class=HTMLResponse)
     def home(q: str = Query(default="")) -> str:
@@ -18,7 +18,7 @@ def create_app(notes_dir: Path) -> FastAPI:
         items = "".join([f'<li><a href="/note/{n.name}">{n.name}</a></li>' for n in notes])
         return f"""
         <html><body>
-        <h1>paper-digester</h1>
+        <h1>paper-review-tool</h1>
         <form><input name='q' value='{q}' placeholder='search'/><button>Search</button></form>
         <ul>{items}</ul>
         </body></html>
@@ -30,7 +30,7 @@ def create_app(notes_dir: Path) -> FastAPI:
         if not note.exists() or note.suffix != ".md":
             raise HTTPException(status_code=404, detail="Note not found")
         raw = note.read_text(encoding="utf-8")
-        html = markdown.markdown(raw)
+        html = markdown.markdown(raw, extensions=["extra", "sane_lists"])
         slug = note.stem
         pdf_path = notes_dir / "pdfs" / f"{slug}.pdf"
         pdf_link = f"<p><a href='/file/pdfs/{slug}.pdf'>PDF</a></p>" if pdf_path.exists() else ""

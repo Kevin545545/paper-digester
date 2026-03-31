@@ -16,24 +16,25 @@ def test_note_template_contains_required_sections():
         year="2026",
         source="arXiv:1234.5678",
         abstract="A summary",
-        keywords="k1, k2",
         tags="t1, t2",
         added_at="2026-03-04T00:00:00+00:00",
         slug="test-paper",
-        key_contributions=["c1"],
-        method_overview=["m1"],
-        strengths=["s1"],
-        weaknesses=["w1"],
-        my_questions=["q1"],
+        paper_reference="A, B (2026). Test Paper. arXiv:1234.5678.",
+        goal_of_paper="Goal paragraph.",
+        data="Data paragraph.",
+        algorithm="Algorithm paragraph.",
+        statistical_results="Results paragraph.",
+        your_interpretation="Interpretation paragraph.",
     )
     text = build_note_template(note)
     required = [
-        "## Abstract",
-        "## Key Contributions",
-        "## Method Overview",
-        "## Strengths",
-        "## Weaknesses",
-        "## My Questions",
+        "# Paper Review",
+        "## Paper Reference",
+        "## Goal of the Paper",
+        "## Data",
+        "## Algorithm",
+        "## Statistical Results",
+        "## Your Interpretation",
         "- **Added-at:**",
     ]
     for section in required:
@@ -48,11 +49,11 @@ def test_index_generation_sorted_newest_first(tmp_path: Path):
     newer = sdir / "newer.md"
 
     older.write_text(
-        "# Older\n- **Year:** 2022\n- **Source:** s\n- **Tags:** x\n- **Added-at:** 2024-01-01T00:00:00+00:00\n",
+        "# Paper Review\n\n## Metadata\n- **Title:** Older\n- **Year:** 2022\n- **Source:** s\n- **Tags:** x\n- **Added-at:** 2024-01-01T00:00:00+00:00\n",
         encoding="utf-8",
     )
     newer.write_text(
-        "# Newer\n- **Year:** 2025\n- **Source:** s\n- **Tags:** y\n- **Added-at:** 2025-01-01T00:00:00+00:00\n",
+        "# Paper Review\n\n## Metadata\n- **Title:** Newer\n- **Year:** 2025\n- **Source:** s\n- **Tags:** y\n- **Added-at:** 2025-01-01T00:00:00+00:00\n",
         encoding="utf-8",
     )
 

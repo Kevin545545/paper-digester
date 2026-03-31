@@ -8,7 +8,7 @@ import requests
 
 from .arxiv_fetch import PaperMeta, fetch_arxiv_metadata, parse_arxiv_id
 from .pdf_extract import extract_pdf_text
-from .summarizer import generate_sections
+from .summarizer import generate_review
 from .utils import now_iso, slugify
 
 
@@ -19,15 +19,15 @@ class NoteRecord:
     year: str
     source: str
     abstract: str
-    keywords: str
     tags: str
     added_at: str
     slug: str
-    key_contributions: list[str]
-    method_overview: list[str]
-    strengths: list[str]
-    weaknesses: list[str]
-    my_questions: list[str]
+    paper_reference: str
+    goal_of_paper: str
+    data: str
+    algorithm: str
+    statistical_results: str
+    your_interpretation: str
 
 
 def summary_dir(notes_dir: Path) -> Path:
@@ -62,34 +62,32 @@ def _index_header() -> str:
     return "# Paper Digester Index\n\n| Added At | Title | Year | Source | Tags |\n|---|---|---:|---|---|\n"
 
 
-def _bullets(lines: list[str]) -> str:
-    cleaned = [x.strip() for x in lines if x.strip()]
-    if not cleaned:
-        cleaned = ["TBD"]
-    return "\n".join([f"- {x}" for x in cleaned])
-
-
 def build_note_template(record: NoteRecord) -> str:
     return (
-        f"# {record.title}\n\n"
+        "# Paper Review\n\n"
+        "## Paper Reference\n"
+        f"{record.paper_reference}\n\n"
+        f"- Full citation: {record.paper_reference}\n"
+        f"- Title: {record.title}\n"
+        f"- Authors: {record.authors}\n\n"
+        "## Goal of the Paper\n"
+        f"{record.goal_of_paper}\n\n"
+        "## Data\n"
+        f"{record.data}\n\n"
+        "## Algorithm\n"
+        f"{record.algorithm}\n\n"
+        "## Statistical Results\n"
+        f"{record.statistical_results}\n\n"
+        "## Your Interpretation\n"
+        f"{record.your_interpretation}\n\n"
+        "---\n\n"
+        "## Metadata\n"
+        f"- **Title:** {record.title}\n"
         f"- **Authors:** {record.authors}\n"
         f"- **Year:** {record.year}\n"
         f"- **Source:** {record.source}\n"
         f"- **Added-at:** {record.added_at}\n"
-        f"- **Keywords:** {record.keywords}\n"
-        f"- **Tags:** {record.tags}\n\n"
-        "## Abstract\n\n"
-        f"{record.abstract or 'N/A'}\n\n"
-        "## Key Contributions\n\n"
-        f"{_bullets(record.key_contributions)}\n\n"
-        "## Method Overview\n\n"
-        f"{_bullets(record.method_overview)}\n\n"
-        "## Strengths\n\n"
-        f"{_bullets(record.strengths)}\n\n"
-        "## Weaknesses\n\n"
-        f"{_bullets(record.weaknesses)}\n\n"
-        "## My Questions\n\n"
-        f"{_bullets(record.my_questions)}\n"
+        f"- **Tags:** {record.tags}\n"
     )
 
 
@@ -99,6 +97,7 @@ def add_paper(
     source_input: str,
     tags: list[str] | None = None,
     download_pdf: bool = False,
+    project_context: str = "",
 ) -> Path:
     del project_root
     tags = tags or []
@@ -107,37 +106,47 @@ def add_paper(
     meta = _build_metadata(source_input)
     slug = slugify(meta.title)
 
-    pdf_excerpt = ""
+    body_text = ""
     if download_pdf and meta.pdf_url:
         pdf_path = notes_dir / "pdfs" / f"{slug}.pdf"
         _download_pdf_if_needed(meta.pdf_url, pdf_path)
         try:
-            pdf_excerpt = extract_pdf_text(pdf_path, max_pages=1)
+            body_text = extract_pdf_text(pdf_path)
         except Exception:
-            pdf_excerpt = ""
+            body_text = ""
 
-    note_path = _write_summary_note(notes_dir, slug, meta, pdf_excerpt, tags)
+    note_path = _write_summary_note(notes_dir, slug, meta, body_text, tags, project_context=project_context)
     rebuild_index(notes_dir)
     return note_path
 
 
-def _write_summary_note(notes_dir: Path, slug: str, meta: PaperMeta, pdf_excerpt: str, tags: list[str]) -> Path:
-    sections = generate_sections(meta, pdf_excerpt)
+def _write_summary_note(
+    notes_dir: Path,
+    slug: str,
+    meta: PaperMeta,
+    body_text: str,
+    tags: list[str],
+    project_context: str = "",
+) -> Path:
+    review = generate_review(meta, body_text, project_context=project_context)
+    if project_context and project_context not in review["your_interpretation"]:
+        review["your_interpretation"] = f"{review['your_interpretation']} Project context: {project_context}"
+
     note = NoteRecord(
         title=meta.title,
         authors=", ".join(meta.authors) if meta.authors else "Unknown",
         year=meta.year or "Unknown",
         source=meta.source,
-        abstract=meta.abstract.strip() if meta.abstract else pdf_excerpt[:1800],
-        keywords="",
+        abstract=meta.abstract.strip() if meta.abstract else "",
         tags=", ".join(tags),
         added_at=now_iso(),
         slug=slug,
-        key_contributions=sections["key_contributions"],
-        method_overview=sections["method_overview"],
-        strengths=sections["strengths"],
-        weaknesses=sections["weaknesses"],
-        my_questions=sections["my_questions"],
+        paper_reference=review["paper_reference"],
+        goal_of_paper=review["goal_of_paper"],
+        data=review["data"],
+        algorithm=review["algorithm"],
+        statistical_results=review["statistical_results"],
+        your_interpretation=review["your_interpretation"],
     )
     note_path = _unique_path(summary_dir(notes_dir) / f"{slug}.md")
     note_path.write_text(build_note_template(note), encoding="utf-8")
@@ -181,7 +190,7 @@ def rebuild_index(notes_dir: Path) -> Path:
     rows: list[tuple[str, str]] = []
     for n in list_notes(notes_dir):
         content = n.read_text(encoding="utf-8")
-        title = _extract_field(content, "# ") or n.stem
+        title = _extract_bullet_value(content, "Title") or n.stem
         year = _extract_bullet_value(content, "Year") or "Unknown"
         source = _extract_bullet_value(content, "Source") or "Unknown"
         tags = _extract_bullet_value(content, "Tags") or ""
@@ -206,13 +215,6 @@ def search_notes(notes_dir: Path, keyword: str) -> list[Path]:
         if k in text:
             matches.append(note)
     return matches
-
-
-def _extract_field(content: str, prefix: str) -> str | None:
-    for line in content.splitlines():
-        if line.startswith(prefix):
-            return line[len(prefix) :].strip()
-    return None
 
 
 def _extract_bullet_value(content: str, field: str) -> str | None:

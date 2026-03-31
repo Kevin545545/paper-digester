@@ -14,7 +14,7 @@ from .web import create_app
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="paper-digester",
-        description="Turn arXiv links/ids into structured Markdown notes.",
+        description="Turn arXiv links/ids into structured Markdown paper reviews.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -27,6 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_add.add_argument("--tags", nargs="*", default=[], help="Optional tags")
     p_add.add_argument("--notes-dir", help="Directory to store notes and INDEX.md")
     p_add.add_argument("--download-pdf", action="store_true", help="Download arXiv PDF to notes_dir/pdfs")
+    p_add.add_argument("--project-context", default="", help="Optional context about your own project")
     p_add.set_defaults(func=cmd_add)
 
     p_list = sub.add_parser("list", help="List notes newest-first")
@@ -73,7 +74,14 @@ def cmd_add(args: argparse.Namespace) -> int:
     notes_dir = resolve_notes_dir(args.notes_dir)
     if args.notes_dir:
         save_config(notes_dir)
-    note_path = add_paper(root, notes_dir, args.source, tags=args.tags, download_pdf=args.download_pdf)
+    note_path = add_paper(
+        root,
+        notes_dir,
+        args.source,
+        tags=args.tags,
+        download_pdf=args.download_pdf,
+        project_context=args.project_context,
+    )
     print(f"Added note: {note_path}")
     return 0
 
